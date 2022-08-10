@@ -1,0 +1,6 @@
+{
+    "ichimoku_cloud" : [
+        "ipc:///tmp/binance_spot_candlestick_BTCUSDT_60.ipc",
+        "ipc:///tmp/binance_linear_swap_candlestick_BTCUSDT_60.ipc"
+    ]
+}
