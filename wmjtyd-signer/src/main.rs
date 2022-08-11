@@ -7,16 +7,18 @@ async fn main() {
 
     let matches: clap::ArgMatches = clap_app!(quic =>
         (about: "Signal calculation organization procedure")
-        (@arg SIGNERLIST: -l --signerlist "View all signals")
-        (@arg CONFIGPATH: -c --configpath "Config path")
-        (@arg QUESTDBADDR: --questdbaddr "QuestDB-Addr default 127.0.0.1:9009")
-        (@arg QUESTDBTTL: --questdbttl "QuestDB-TTL default 100")
+        (@arg SIGNERLIST: -l --signer_list +use_delimiter "View all signals")
+        (@arg CONFIGPATH: -c --config_path +takes_value "Config path")
+        (@arg QUESTDBADDR: --questdb_addr  +takes_value "QuestDB-Addr default 127.0.0.1:9009")
+        (@arg QUESTDBTTL: --questdb_ttl +takes_value "QuestDB-TTL default 100")
     )
     .get_matches();
 
     tracing::debug!("yes");
 
-    let config_path = matches.value_of("CONFIGPATH").unwrap_or("./conf/signer.json");
+    let config_path = matches
+        .value_of("CONFIGPATH")
+        .unwrap_or("./conf/signer.json");
 
     let questdb_addr = matches.value_of("QUESTDBADDR").unwrap_or("127.0.0.1:9009");
 

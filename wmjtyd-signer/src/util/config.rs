@@ -1,4 +1,4 @@
-use crate::indicator_trait::data::{GetShareData};
+use crate::indicator_trait::data::GetShareData;
 use anyhow::Context;
 use notify::{EventHandler, RecommendedWatcher, RecursiveMode, Watcher};
 use std::net::SocketAddr;

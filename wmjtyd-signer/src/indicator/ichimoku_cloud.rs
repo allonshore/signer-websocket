@@ -146,10 +146,10 @@ pub async fn kline_ichimku_monitor(
             sender
                 .send(Box::new(Indicator {
                     table_name: "kline_ichimoku_monitor_v4".to_string(),
-                    exchange: "name".to_string(),
-                    market_type: "sudo".to_string(),
-                    msg_type: "ccc".to_string(),
-                    symbol: "ccc".to_string(),
+                    exchange: "test".to_string(),
+                    market_type: "test".to_string(),
+                    msg_type: "test".to_string(),
+                    symbol: "test".to_string(),
                     signer_type: "ichimoku_cloud".to_string(),
                     data: IchimokuCloudResult {
                         open: kline_msg.open,
@@ -169,11 +169,6 @@ pub async fn kline_ichimku_monitor(
                     },
                 }))
                 .unwrap();
-
-            // questdb_udp_socket
-            //     .send(ilp_inchimoku_cloud_signer.as_bytes())
-            //     .await
-            //     .context("failed to send kline_ichimoku_monitor_v3")?;
 
             Ok::<&'static str, anyhow::Error>("done")
         };

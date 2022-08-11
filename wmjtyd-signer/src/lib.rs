@@ -9,7 +9,7 @@ use indicator::create_ichimoku_cloud;
 use indicator_trait::result::SerializeToJsonAndInfluxQuery;
 
 use util::{config::ConfigBuilder, dynamic_config::DynamicConfigHandler};
-use wmjtyd_libstock::message::{zeromq::ZeromqPublisher, traits::Bind};
+use wmjtyd_libstock::message::{traits::Bind, zeromq::ZeromqPublisher};
 
 pub async fn start(config: ConfigBuilder) {
     tracing::debug!("start questdb connect");
@@ -18,11 +18,11 @@ pub async fn start(config: ConfigBuilder) {
         .await
         .expect("connect quest error");
 
-    
     let mut pub_socket = ZeromqPublisher::new().expect("init zeromq pub");
-    pub_socket.bind("ipc:///tmp/signer_all.ipc").expect("path error");
+    pub_socket
+        .bind("ipc:///tmp/signer_all.ipc")
+        .expect("path error");
     tracing::debug!("pub_socket bind");
-    
 
     let handle = tokio::runtime::Handle::current();
 
@@ -30,18 +30,19 @@ pub async fn start(config: ConfigBuilder) {
 
     let mut handler = DynamicConfigHandler::new(
         handle,
-        Box::new(move |handle, sginer_name, ipcs| {
+        Box::new(move |handle, sginer_name, ipc_data| {
             tracing::debug!("handler");
             let tx = tx.clone();
-            let handle_ = handle.clone();
             handle.spawn(async move {
-                create_ichimoku_cloud(handle_, &sginer_name, tx, ipcs).await;
+                create_ichimoku_cloud(&sginer_name, tx, ipc_data).await;
             })
         }),
     );
 
-    handler.handel_config(config.config_path.as_ref()).expect("format error");
-
+    tracing::debug!("config path {}", config.config_path);
+    handler
+        .handel_config(config.config_path.as_ref())
+        .expect("config format or path");
 
     let _watcher = config.create_watcher(handler).unwrap();
 
@@ -57,6 +58,5 @@ pub async fn start(config: ConfigBuilder) {
         if pub_socket.write_all(&mut json.as_bytes()).is_err() {
             tracing::error!("ipc send");
         }
-        
     }
 }
