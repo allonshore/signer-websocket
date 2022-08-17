@@ -12,7 +12,7 @@ use axum::{
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{net::SocketAddr};
+use std::{net::SocketAddr, sync::atomic::{AtomicUsize, Ordering}};
 use tower_http::{
     services::ServeDir,
     trace::{DefaultMakeSpan, TraceLayer},
@@ -48,12 +48,12 @@ type TxJSON = Sender<String>;
 type RxJSON = Receiver<String>;
 
 pub enum SocketAction {
-    Add(i64,TxJSON),
-    Remove(i64)
+    Add(usize,TxJSON),
+    Remove(usize)
 }
-
+unsafe impl Send for SocketAction{}
 pub async fn updateA(receiverAction:ReceiverAction){
-    let mut senderMap:HashMap<i64,TxJSON> = HashMap::new();
+    let mut senderMap:HashMap<usize,TxJSON> = HashMap::new();
     let sub = ZeromqSubscriber::new();
     let ipc = "ipc:///tmp/signer_all.ipc";
     if sub.is_err() {
@@ -119,7 +119,7 @@ pub async fn updateA(receiverAction:ReceiverAction){
     }
     tracing::debug!("loop end")    
 }
-
+static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
@@ -160,12 +160,12 @@ async fn ws_handler(
     if let Some(TypedHeader(user_agent)) = user_agent {
         println!("`{}` connected", user_agent.as_str());
     }
-    let senderAction = senderAction.clone();
+    // let senderAction = senderAction.clone();
    
 
 
     // let sen = Mutex::new(senderAction); 
-    ws.on_upgrade(  |socket| handle_socket(socket,senderAction ))
+    ws.on_upgrade( move |socket| handle_socket(socket,senderAction.clone() ))
 
     // ws.on_upgrade( |socket| 
     //     {tokio::spawn(
@@ -183,7 +183,8 @@ async fn handle_socket(
  
 ) {
     let (TxJSON, RxJSON) = channel(100);
-  
+    // let NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
+    let my_id = NEXT_USER_ID.fetch_add(1, Ordering::Relaxed);
     loop {
         tokio::select! {
             val = RxJSON.recv() =>{
@@ -193,8 +194,37 @@ async fn handle_socket(
                 if let Ok(msg) = msg {
                     match msg {
                         RawMessage::Text(t) => {
-                            
-                            let actions = processing_requests(&t, sender.clone(),TxJSON.clone(),&socket).await;
+                            println!("{}",t);
+                            let params: Action = serde_json::from_str(&t).unwrap();
+                            if let Some(echo) = params.echo {
+                                let result = String::new();
+                                let param:Params= serde_json::from_str(&params.params.to_string()).unwrap();
+                                let fileName = fileNamePartData(&param);
+                        
+                            } else {
+                                if params.action == "subscribe" {
+                                    //  let mut receivers = receiverList.receiver.lock().unwrap();
+                                    // let mut receiver = state.receiver.lock().unwrap();
+                                    // let (sender,receiver) = channel();
+                                    // let mut rng = rand::thread_rng();
+                                    // let y = rng.gen::<i64>();
+                                    // let sen=  sender.lock().unwrap();
+                                    
+                                    // let my_id = NEXT_USER_ID.fetch_add(1, Ordering::Relaxed);
+                                    sender.send(SocketAction::Add(my_id,TxJSON.clone())).await.unwrap();
+                                    // tx.send(Mutex::new((y,socket)));
+                                    // receivers.insert(y, sender);
+                                    // return "{\"echo\":".to_string() + &y.to_string() + "}";
+                                }
+                                if params.action == "unsubscribe" {
+                                    // let mut receiver = state.receiver.lock().unwrap();
+                                    // let echo = params.params["echo"].as_i64().unwrap();
+                                    sender.send(SocketAction::Remove(my_id)).await.unwrap();
+                                    // receiver.remove(&echo);
+                                    // return "{\"echo\":".to_string() + &echo.to_string() + "}";
+                                }
+                            }
+                            // let actions = processing_requests(&t, sender.clone(),TxJSON.clone()).await;
                             socket.send(RawMessage::Text("hello world".to_string())).await.unwrap();
                            
                         }
@@ -302,73 +332,34 @@ pub struct ReceiverList{
     pub receiver:Arc<Mutex<HashMap<i64,Sender<String>>>>
 }
 
-pub async fn processing_requests(str: &str, sender:Sender<SocketAction>,tx:TxJSON ,socket:&WebSocket) -> String {
-    println!("{}",str);
-    let params: Action = serde_json::from_str(str).unwrap();
-    if let Some(echo) = params.echo {
-        let result = String::new();
-        let param:Params= serde_json::from_str(&params.params.to_string()).unwrap();
-        let fileName = fileNamePartData(&param);
-        // let day = if let Some(day) = param.day {
-        //      day
-        // }else{
-        //      0
-        // };
-        // updateA(&receiverList,&socket);
+// pub async fn processing_requests(str: &str, sender:Sender<SocketAction>,tx:TxJSON ) -> String {
+//     println!("{}",str);
+//     let params: Action = serde_json::from_str(str).unwrap();
+//     if let Some(echo) = params.echo {
+//         let result = String::new();
+//         let param:Params= serde_json::from_str(&params.params.to_string()).unwrap();
+//         let fileName = fileNamePartData(&param);
 
-        //0是单天 1是昨天 2 前天 - 8
-        // let r = FileReader::new(fileName, day);
+//     } else {
+//         if params.action == "subscribe" {
+//             //  let mut receivers = receiverList.receiver.lock().unwrap();
+//             // let mut receiver = state.receiver.lock().unwrap();
+//             // let (sender,receiver) = channel();
+//             let mut rng = rand::thread_rng();
+//             let y = rng.gen::<i64>();
+//             // let sen=  sender.lock().unwrap();
+//             sender.send(SocketAction::Add(y,tx)).await.unwrap();
+//             // tx.send(Mutex::new((y,socket)));
+//             // receivers.insert(y, sender);
+//             return "{\"echo\":".to_string() + &y.to_string() + "}";
+//         }
+//         if params.action == "unsubscribe" {
+//             // let mut receiver = state.receiver.lock().unwrap();
+//             let echo = params.params["echo"].as_i64().unwrap();
+//             // receiver.remove(&echo);
+//             return "{\"echo\":".to_string() + &echo.to_string() + "}";
+//         }
+//     }
 
-        // for i in r.unwrap() {
-        //     println!("{:?}", i);
-        //     socket.send(RawMessage::Text(json!(i).to_string())).await.unwrap();
-        //     // socket.
-        // }
-        // let receiver = state.receiver.clone();
-        //0是单天 1是昨天 2 前天 - 8
-        // let r = FileReader::new("binance_spot_candlestick_BTCUSDT_60".to_string(), 9);
-        //
-        // for i in r.unwrap() {
-        //     println!("{:?}", i);
-        // }
-
-            // let locked = receiver.lock();
-            // println!("{:?}",locked);
-            // let xx = locked.unwrap();
-            // println!("{:?}",xx);
-            // let receiver = xx.get(&echo).unwrap();
-            // println!("22{:?}",receiver);
-            // for msg in receiver {
-            //     let msg: Message = msg;
-            //     println!("1111{}",msg);
-            //     let received_at = msg.received_at as i64;
-            //
-            //
-            //     // let orderbook = &orderbook[0];
-            //     // result.clone().push_str(&json!(orderbook).to_string());
-            //     // break;
-            // }
-
-    } else {
-        if params.action == "subscribe" {
-            //  let mut receivers = receiverList.receiver.lock().unwrap();
-            // let mut receiver = state.receiver.lock().unwrap();
-            // let (sender,receiver) = channel();
-            let mut rng = rand::thread_rng();
-            let y = rng.gen::<i64>();
-            // let sen=  sender.lock().unwrap();
-            sender.send(SocketAction::Add(y,tx));
-            // tx.send(Mutex::new((y,socket)));
-            // receivers.insert(y, sender);
-            return "{\"echo\":".to_string() + &y.to_string() + "}";
-        }
-        if params.action == "unsubscribe" {
-            // let mut receiver = state.receiver.lock().unwrap();
-            let echo = params.params["echo"].as_i64().unwrap();
-            // receiver.remove(&echo);
-            return "{\"echo\":".to_string() + &echo.to_string() + "}";
-        }
-    }
-
-    return "".to_string();
-}
+//     return "".to_string();
+// }
